@@ -45,16 +45,13 @@ class BokehTableComponent():
         for k in self.data.keys():
             columns.append(TableColumn(field=k, title=k))
             #TableColumn(field="dates", title="StartDate", formatter=DateFormatter()),
-        data_table = DataTable(source=source, columns=columns, width=300, height=280)
+        data_table = DataTable(source=source, columns=columns, width=self._settings['width'], height=self._settings['height'])
         
         # assign class variables
         self.data_table = data_table
         self.source = source
         return self.data_table
     
-    def getSelected(self):
-        s = self.source.selected.indices
-        return s
 
     def doRemoveIndices(self,selected_index):
         for k in self.data.keys():
@@ -68,6 +65,30 @@ class BokehTableComponent():
         if self.doRemoveIndices(selected_index):
             return True
         return False
+
+
+    ## Event Handles
+    # Call me when you get a selection event on the resulting table
+    def handle_select_callback(self,attr, old, new):
+
+        indices = [self.data[self.id_field][i] for i in new ]
+        self.source.selected.indices = new
+        self.do_handle_select(attr,old,new)
+
+    
+    def Class(self):
+        classobj= globals()[self.__class__.__name__]
+        return classobj
+
+    def getCallback(self):
+        return self.handle_select_callback
+
+    def registerHook(action,function):
+        pass
+
+    def getSelected(self):
+        s = self.source.selected.indices
+        return s
 
     def removeSelected(self):
         try: 
@@ -88,26 +109,10 @@ class BokehTableComponent():
         self.setDataAndRefresh(self.data)
         self.source.selected.indices = []
 
-    ## Event Handles
-    # Call me when you get a selection event on the resulting table
-    def handle_select_callback(self,attr, old, new):
-
-        indices = [self.data[self.id_field][i] for i in new ]
-        self.source.selected.indices = new
-        self.do_handle_select(attr,old,new)
-
     def do_handle_select(self,attr,old,new):
         pass
     
-    def Class(self):
-        classobj= globals()[self.__class__.__name__]
-        return classobj
-
-    def getCallback(self):
-        return self.handle_select_callback
-
-    def registerHook(action,function):
-        pass
+    
     ####### 
     # Global Interface that needs to be updated whenever inheritance happens
     #
@@ -128,6 +133,11 @@ class BokehControl():
         self._settings = settings
         if settings == None:
             self._settings = {}
+        self.doInit()
+    def doInit(self):
+        pass
+    def regiserHooks(self):
+        pass
 
 class BokehButton(BokehControl):
         
@@ -170,6 +180,8 @@ class QueryTableComponent(BokehTableComponent):
 
     def doDataUpdate(self):
         self.data = self.pi.QueryData()
+        self.setDataAndRefresh(self.data)
+
         return True    
 
 
@@ -181,7 +193,11 @@ class BufferedQueryInterface():
     QueryTableComponent(BokehTableComponent) ----> BufferedQueryInterface
     The buffered Query Interface can be used by a BokehTableComponent to handle data. The BokehTable handles events, and front-end concerns. The Query Interface handles data, and all query concerns. It is possible to inherit from, and oveerride the Buffered Query Interface to support a wide variety of queries. These can be to MongoDB, to SQLite, to flat files.
     '''
-    def __init__(self):
+    def __init__(self,settings = None):
+        self._settings = {}
+        if settings:
+            self._settings = settings
+        
         self.load_data_buffer()
 
     def QueryIndices(self,query=None):
@@ -213,14 +229,18 @@ class BufferedQueryInterface():
                 ret_data[k] = [self.data[k][i] for i in indices]
             return ret_data
         return None
-    def DoAction(self,action_id = None,query=None):
+
+    def DoAction(self,action_id = None,query=None,indicesIn = None):
         '''
         Try to execute any user defined action.
         '''        
         if action_id not in self.actions.keys():
             raise Exception("Encountered illegial action request in " + str(self) + " with action " + action_id )
         action_func = self.actions[action_id]
-        indices = self.QueryIndices(query)
+        if indicesIn:
+            indices = indicesIn
+        else:
+            indices = self.QueryIndices(query)
         action_func(indices)
         self.load_data_buffer()
 
@@ -243,4 +263,101 @@ class BufferedQueryInterface():
         for k in self.data.keys(): 
             for selected_index in reversed(ids):
                 self.data[k].pop(selected_index)
-      
+
+#
+# BokehTimeseriesGraphic && ExampleQuery shows easy line graphs, and 
+#
+#
+class ExampleQuery(BufferedQueryInterface):
+    '''
+    An example of a data query that produces a compatible lookup table.
+    '''
+    
+    #### Interface below -- Should be overriden by data sources
+    #
+    #
+    #
+    #
+    def load_data_buffer(self):
+        start_init=self._settings['start_date']
+        end_init=self._settings['end_date']     
+
+        # Grab data
+        start=start_init
+        end=end_init 
+
+        data=pdr.get_data_yahoo('AAPL',start,end)
+        data_sorted=data.sort_index(axis=0,ascending=True)
+        date_list=list(data_sorted.index)
+
+        # Save the data elements
+        open_list=list(data_sorted['Open'])
+        close_list=list(data_sorted['Close'])
+        date_time=[datetime.strptime(str(d),'%Y-%m-%d %H:%M:%S').date() for d in date_list]
+        
+        self.data = {
+            'open_list':open_list,
+            'close_list':close_list,
+            'date_time':date_time,
+            }
+
+class BokehTimeseriesGraphic(BokehControl):
+    
+    def getBokehComponent(self):
+        self.setPlotData()
+        return self.createBokehComponent()
+    def doDataUpdate(self):
+        self.setPlotData()
+
+    def setPlotData(self):
+        data_defs = self._settings['data_defs']
+        try:
+            self.day_increment = self.day_increment +1
+        except:
+            self.day_increment = 0
+        
+        data = self._settings['query'].QueryData()
+        
+        try:
+            if (self.init_plot_data):
+                pass
+        except:
+            self.init_plot_data=1
+            try:
+                self.sources = {}
+                for dd in data_defs:
+                    data_dict = dict(x=data[dd['x']], y=data[dd['y']])
+                    dd['column_data_source'] = ColumnDataSource(data_dict)
+                    self.sources[dd['key']] = dd
+            except Exception as e:
+                print(e)
+            
+        if self.init_plot_data == 1:
+            for dd in data_defs:
+                ds = self.sources[dd['key']]
+                ds = ds['column_data_source']
+                data_dict = dict(x=data[dd['x']], y=data[dd['y']])
+                ds.data = data_dict
+            for dd in data_defs:
+                ds = self.sources[dd['key']]
+                ds = ds['column_data_source']
+                ds.trigger('data', None, ds.data)
+
+    def createPlotElement(self,p,dd):
+        return p.line(x='x',y='y',legend=dd['label'],color=dd['color'], alpha=0.5,source = dd['column_data_source'])
+
+    def createBokehComponent(self):
+        p=figure(x_axis_type='datetime',plot_width=self._settings['width'],plot_height=self._settings['height'],title=self._settings['title'],tools="",
+                      toolbar_location=None)
+        for dd in self.sources.values():
+            self.createPlotElement(p,dd)
+        p.legend.location = "bottom_right"
+        return(p) 
+
+    # Interface -- Overload, or set, these settings to configure the graph
+    #
+    #
+    #
+    #
+    def doInit(self):
+        pass      
