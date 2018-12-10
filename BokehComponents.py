@@ -61,7 +61,7 @@ class BokehTableComponent():
     def doDataUpdate(self):
         return True
 
-    def removeIndices(self,selected_index):
+    def __removeIndices(self,selected_index):
         if self.doRemoveIndices(selected_index):
             return True
         return False
@@ -103,8 +103,29 @@ class BokehTableComponent():
         if l == 0:
             self.source.selected.indices = []
             return
+        indicesIn = self.source.selected.indices.copy()
+        indicesIn.sort(reverse=True)
+        for i in indicesIn:
+            self.__removeIndices(i)
+        self.doDataUpdate()
+        self.setDataAndRefresh(self.data)
+        self.source.selected.indices = []
+
+    def removeSelected(self,indicesIn=None):
+        try: 
+            l = len(self.source.selected.indices)
+        except:
+            print("CRITICAL ERROR in removeSelected")
+            print(self._settings)
+            display(self.source)
+            display(self.source.selected)
+            display(self.source.selected.indices)
+
+        if l == 0:
+            self.source.selected.indices = []
+            return
         selected_index = self.source.selected.indices[0]
-        self.removeIndices(selected_index)
+        self.__removeIndices(selected_index)
         self.doDataUpdate()
         self.setDataAndRefresh(self.data)
         self.source.selected.indices = []
@@ -180,6 +201,8 @@ class QueryTableComponent(BokehTableComponent):
 
     def doDataUpdate(self):
         self.data = self.pi.QueryData()
+        #for k in self.data.keys():        
+        #    print(len(self.data[k]))
         self.setDataAndRefresh(self.data)
 
         return True    
@@ -198,8 +221,10 @@ class BufferedQueryInterface():
         if settings:
             self._settings = settings
         
+        self.componentsToNotify = []
+        self.actions = {}
         self.load_data_buffer()
-
+        self.dataNotify()
     def QueryIndices(self,query=None):
         '''
         Find the indices that result from executing any query.
@@ -230,6 +255,14 @@ class BufferedQueryInterface():
             return ret_data
         return None
 
+    def registerAction(self,action_id ,functionPointer):
+        self.actions[action_id ] = functionPointer
+        pass
+
+    def registerNotify(self,componentsToNotify):
+        for c in componentsToNotify:
+            self.componentsToNotify.append(c)
+
     def DoAction(self,action_id = None,query=None,indicesIn = None):
         '''
         Try to execute any user defined action.
@@ -241,8 +274,14 @@ class BufferedQueryInterface():
             indices = indicesIn
         else:
             indices = self.QueryIndices(query)
-        action_func(indices)
+        action_func(self,indices)
         self.load_data_buffer()
+        self.dataNotify()
+
+
+    def dataNotify(self):
+        for c in self.componentsToNotify:
+            c.setDataAndRefresh(self.data)
 
     #### Interface below -- Should be overriden by data sources
     #
@@ -308,6 +347,9 @@ class BokehTimeseriesGraphic(BokehControl):
         return self.createBokehComponent()
     def doDataUpdate(self):
         self.setPlotData()
+    def setDataAndRefresh(self,dataIn):
+        self.setPlotData()
+
 
     def setPlotData(self):
         data_defs = self._settings['data_defs']
