@@ -69,4 +69,4 @@ Comments: I am  currently extracting and structuring the following examples, and
 # Thanks
 I hope you find the work useful, and any comments / questions are welcome.
 
-[Justin Girard]()
+[Justin Girard](https://www.linkedin.com/in/justin-girard/)
