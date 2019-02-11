@@ -29,6 +29,8 @@ class Dashboard:
     def getPeriodicCallbacks(self):
         return self.periodicCallbacks
         
+    def addPeriodicCallback(self,callback,speed=500):
+        self.periodicCallbacks.append([callback,speed])
 
     def setLayout(key,layout):
         self.layouts[key] = layout
@@ -89,11 +91,14 @@ class Dashboard:
         doc.add_root(create_figure())
         pc_list = self.getPeriodicCallbacks()
         for callback in pc_list:
-            doc.add_periodic_callback(callback, 500)
+            doc.add_periodic_callback(callback[0], callback[1])
 
-    def showDashboard(self, notebook_url="ec2.paxculturastudios.com:9999"):        
+    def showDashboard(self, notebook_url=None):
+        if notebook_url is None:
+            raise Exception("No notebook URL defined!")
         output_notebook()
         output_file("data_table.html")
+
         app = Application( FunctionHandler(self.modify_doc))
         doc = app.create_document()
         show(app, notebook_url=notebook_url)
