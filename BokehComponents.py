@@ -678,11 +678,10 @@ class ExperimentTable(QueryTableComponent):
 
 class ActionButton(BokehButton):
     def handle_click(self,event):
-        import pprint
-        pprint.pprint(self._settings )
+        #import pprint
+        #pprint.pprint(self._settings )
         try:
             query = self._settings['query']
-            print("1")
             if 'selection' in self._settings and self._settings['selection']==True:
                 # 1. Get the experiment ids from the table
                 ids = []
@@ -730,7 +729,7 @@ class LoadButton(BokehButton):
                 print (self._settings['datasource_targets'])
                 arg = {self._settings['id_field']:anId}
                 act = self._settings['action']
-                for trg in self._settings['datasource_targets'].values():
+                for trg in self._settings['datasource_targets']:
                     ## The id we are using must match one of the published filters for the target datasoruce
                     trgKey = trg
                     print(self._settings['id_field'])
@@ -761,10 +760,6 @@ class InteractiveDataGroup:
         assert 'visuals' in settings
         assert 'commands' in settings
         
-        if 'datasource_targets' in settings:
-            self.target_datasoruces = settings['datasource_targets'].copy()
-        else:
-            self.target_datasoruces = []
         
         self.running_tables = {} 
         ds_visuals = {}
@@ -776,8 +771,16 @@ class InteractiveDataGroup:
             self.datasources[ds['datasource_id']].refresh()
             ds_visuals[ds['datasource_id']] = []
             self.running_tables [ds['datasource_id']] = []
-        
-        #
+                    
+
+        self.target_datasoruces = []        #
+        if 'datasource_targets' in settings:
+            for ds_key in settings['datasource_targets']:
+                ds = settings['datasource_targets'][ds_key]
+                if isinstance(ds,str):
+                    self.target_datasoruces.append(   self.datasources[ds_key]) #we have the class already
+                else:
+                    self.target_datasoruces.append(ds) #otherwise its an object
         #
         # Create all visuals
         self.visuals = []

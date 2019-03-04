@@ -93,12 +93,37 @@ class Dashboard:
         for callback in pc_list:
             doc.add_periodic_callback(callback[0], callback[1])
 
-    def showDashboard(self, notebook_url=None):
+    def createApplication(self,use_notebook = True):
+        if use_notebook:
+            output_notebook(hide_banner=True)
+            output_file("data_table.html")
+        app = Application( FunctionHandler(self.modify_doc))
+        return app
+
+    def showDashboard(self, notebook_url=None,use_notebook = True):
+        app = self.createApplication(use_notebook )
+        doc = app.create_document()
         if notebook_url is None:
             raise Exception("No notebook URL defined!")
-        output_notebook()
-        output_file("data_table.html")
-
-        app = Application( FunctionHandler(self.modify_doc))
-        doc = app.create_document()
         show(app, notebook_url=notebook_url)
+
+    def getConsole(self,dataGroupList):
+        # Include panels as tabs
+        visual_components = []
+        button_components = []
+        for dataGroup in dataGroupList:
+            for visual in dataGroup.getVisuals():
+                title = "add title:'Default' to"
+                if 'title' in visual._settings:
+                    title = visual._settings['title']
+                panel = Panel(child=visual.getBokehComponent(), title=title)
+                visual_components.append(panel)
+
+            for buttonInstance in dataGroup.getControls():
+                button= buttonInstance.getBokehComponent()
+                button_components.append(button)
+
+        tabs = Tabs(tabs=visual_components, width=500) 
+        return layout([tabs,layout(button_components)])
+                
+            
